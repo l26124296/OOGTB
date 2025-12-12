@@ -1,16 +1,16 @@
 # gui/main_window.py
 
-from PyQt6.QtWidgets import QMainWindow, QTabWidget, QApplication
+from PyQt6.QtWidgets import QMainWindow, QTabWidget
 from PyQt6.QtCore import QSize
 from PyQt6.QtGui import QIcon
 from gui.utils import *
-import qtawesome as qta
-import sys
 
-# 引入剛剛拆分出去的 Tabs
+# 引入所有分頁 Tabs
 from gui.tabs.generator_tabs import LatticeGeneratorTab
 from gui.tabs.hmodel_tabs import PhysicsCalculationTab
-from gui.tabs.new_tabs import SettingsTab
+from gui.tabs.butterfly_tabs import ButterflyTab
+from gui.tabs.ising_tabs import IsingTab
+from gui.tabs.transmission_tabs import TaransmissionTab
 class LatticeStudio(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -28,16 +28,22 @@ class LatticeStudio(QMainWindow):
         # 3. 建立各個分頁的實例
         self.tab_generator = LatticeGeneratorTab()
         self.tab_physics = PhysicsCalculationTab(generator_tab=self.tab_generator)
-        self.tab_settings = SettingsTab()
+        self.tab_butterfly = ButterflyTab(generator_tab=self.tab_generator)
+        self.tab_ising = IsingTab()
+        self.tab_tansmission = TaransmissionTab()
 
         icon_geo = QIcon('icon/geometry.png')
         icon_phy = QIcon('icon/phys.png')
-        icon_set = QIcon('icon/gear.png')
+        icon_butterfly = QIcon('icon/butterfly.png')
+        icon_magnet = QIcon('icon/magnet.png')
+        icon_trans = QIcon('icon/transmission.png')
 
-        self.tabs.addTab(self.tab_generator, icon_geo, "") # 加空格排版比較好看
+        self.tabs.addTab(self.tab_generator, icon_geo, "")
         self.tabs.addTab(self.tab_physics, icon_phy, "")
-        self.tabs.addTab(self.tab_settings, icon_set, "")
-        
+        self.tabs.addTab(self.tab_butterfly, icon_butterfly, "")
+        self.tabs.addTab(self.tab_ising, icon_magnet, "")
+        self.tabs.addTab(self.tab_tansmission, icon_trans, "")
+
         # 5. 美化 Tab 樣式 (CSS)
         # 這裡將左側 Tab 欄位設計成深色背景，選中時變亮
         self.tabs.setStyleSheet("""

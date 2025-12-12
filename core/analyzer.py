@@ -1,10 +1,16 @@
 import numpy as np
-import scipy.sparse as sp
+import time
 from typing import Optional, Tuple, Union, List
 
 # 引入 Model
 from core.PhysicsModel import HamiltonianModel
 
+# 引入 torch (可選)
+try:
+    import torch
+    HAS_TORCH = True
+except ImportError:
+    HAS_TORCH = False
 class ElectronicState:
     """
     電子態分析器 (Electronic State Analyzer).
@@ -155,3 +161,103 @@ class ElectronicState:
         P = self.Projector
         Operator = P @ (X @ P @ Y - Y @ P @ X) @ P
         return 4 * np.pi * np.imag(np.diag(Operator))
+    
+    def calculate_structure_factor(self, q_range: float = 20.0, resolution: int = 400, use_gpu: bool = True) -> Tuple[np.ndarray, list]:
+        """
+        計算結構因子 S(q)。自動選擇 PyTorch (GPU) 或 NumPy (CPU)。
+        
+        Args:
+            q_range: q 空間掃描範圍 ±q_range
+            resolution: Grid size (res x res)
+            use_gpu: 是否優先嘗試 GPU 加速
+            
+        Returns:
+            (magnitude, extent)
+        """
+        if self.Projector is None: raise RuntimeError("Set filled states first.")
+        
+        extent = [-q_range, q_range, -q_range, q_range]
+        
+        # 1. 優先嘗試 Torch
+        if HAS_TORCH and use_gpu:
+            try:
+                print("[Analyzer] Attempting PyTorch acceleration for Structure Factor...")
+                return self._calculate_sf_torch(q_range, resolution), extent
+            except Exception as e:
+                print(f"[Analyzer] PyTorch failed ({e}). Falling back to NumPy.")
+        
+        # 2. Fallback to NumPy
+        print("[Analyzer] Using NumPy for Structure Factor...")
+        return self._calculate_sf_numpy(q_range, resolution), extent
+
+    def _calculate_sf_torch(self, q_range, resolution) -> np.ndarray:
+        """PyTorch 實作 (Tensor Contraction)"""
+        # 裝置選擇
+        device = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
+        print(f"[Analyzer] Torch Device: {device}")
+
+        # 準備數據
+        P_tensor = torch.tensor(self.Projector, dtype=torch.complex128, device=device)
+        W_tensor = torch.diagonal(P_tensor) # Column Sum
+        del P_tensor
+        
+        pos = self.model.geo.positions
+        x_vec = torch.tensor(pos[:, 0], dtype=torch.float64, device=device)
+        y_vec = torch.tensor(pos[:, 1], dtype=torch.float64, device=device)
+        
+        qs = torch.linspace(-q_range, q_range, resolution, dtype=torch.float64, device=device)
+        
+        # Phase Calculation (Outer Product)
+        # qs: (Res,), x_vec: (N,) -> (Res, N)
+        phase_x = torch.exp(1j * torch.outer(qs, x_vec))
+        phase_y = torch.exp(1j * torch.outer(qs, y_vec))
+        
+        # Contraction: sum_m (Ph_x[i,m] * Ph_y[j,m] * W[m])
+        # 使用 einsum 處理
+        sf_tensor = torch.einsum('im,jm,m->ij', phase_x, phase_y, W_tensor)
+        
+        res = sf_tensor.cpu().numpy()
+        N_sites = self.model.geo.positions.shape[0]
+        # 清理
+        del x_vec, y_vec, W_tensor, phase_x, phase_y, sf_tensor
+        if device.type != 'cpu': torch.cuda.empty_cache() if torch.cuda.is_available() else torch.mps.empty_cache()
+            
+        return np.abs(res) / N_sites
+
+    def _calculate_sf_numpy(self, q_range, resolution) -> np.ndarray:
+        """NumPy 實作 (Matrix Multiplication)"""
+        start_t = time.time()
+        
+        # 1. 預計算權重 W (Column sum of P)
+        # P is complex128
+        W = np.diagonal(self.Projector) # Shape: (N,)
+        
+        # 2. 座標與動量向量
+        pos = self.model.geo.positions
+        x_vec = pos[:, 0]
+        y_vec = pos[:, 1]
+        qs = np.linspace(-q_range, q_range, resolution)
+        
+        # 3. 計算相位矩陣 (Broadcasting / Outer Product)
+        # Phase_X shape: (Resolution, N_sites)
+        # 使用 np.multiply.outer 是最快的
+        phase_x = np.exp(1j * np.multiply.outer(qs, x_vec))
+        phase_y = np.exp(1j * np.multiply.outer(qs, y_vec))
+        
+        # 4. 張量縮併 (Tensor Contraction) 轉為 矩陣乘法
+        # 公式: S[i, j] = sum_m ( Ph_x[i, m] * Ph_y[j, m] * W[m] )
+        # 令 Weighted_Ph_y[j, m] = Ph_y[j, m] * W[m]
+        # 則 S[i, j] = sum_m ( Ph_x[i, m] * Weighted_Ph_y[j, m] )
+        # 這就是矩陣乘法: S = Ph_x @ (Weighted_Ph_y)^T
+        
+        # 先將權重 W 廣播到 phase_y
+        weighted_phase_y = phase_y * W[None, :] 
+        
+        # 矩陣相乘 (Res, N) @ (N, Res) -> (Res, Res)
+        sf_matrix = phase_x @ weighted_phase_y.T
+        
+        print(f"[Analyzer] NumPy calculation time: {time.time() - start_t:.4f}s")
+        
+        N_sites = pos.shape[0]
+
+        return np.abs(sf_matrix) / N_sites

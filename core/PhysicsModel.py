@@ -15,10 +15,13 @@ class HamiltonianModel:
     def __init__(self, geometry: SimplicialComplex):
         self.geo = geometry
         self.H_sparse: Optional[sp.csc_matrix] = None # 儲存稀疏矩陣
-        
+        self.Op_X: Optional[sp.csc_matrix] = None    # 儲存位置算符 X (對角矩陣)
+        self.Op_Y: Optional[sp.csc_matrix] = None    # 儲存位置算符 Y (對角矩陣)
         # 快取子晶格資訊 (Bipartite coloring)，避免每次重複計算
         self._sublattice_tags: Optional[np.ndarray] = None 
         self._is_bipartite: Optional[bool] = None
+
+
     def construct(self, 
                   ttdict: Dict[str, complex], 
                   b_field: float = 0.0, 
@@ -31,7 +34,7 @@ class HamiltonianModel:
             ttdict: Hopping 參數字典, e.g. {'NN': 1.0, 'NNN_A': 0.1}
             b_field: 磁場強度 (Flux per area unit)
             vec_pot_mode: 'Landau' or 'Circular'
-            onsite_config: 額外位能設定, e.g. {'type': 'bipartite', 's': 0.5} 或 {'type': 'laplace', 'scale': 1.0}
+            onsite_config: 額外位能設定{'type':('bipartite, 'laplace, 'random'), 'scale': float}
         """
         print(f"[Physics] Constructing Hamiltonian (B={b_field}, Gauge={vec_pot_mode})...")
         
@@ -122,7 +125,7 @@ class HamiltonianModel:
             mode = onsite_config.get('type')
             
             if mode == 'bipartite':
-                s_val = onsite_config.get('s', 0.0)
+                s_val = onsite_config.get('scale', 0.0)
                 if s_val != 0:
                     # 預設使用 type 0 (NN) 來判斷
                     tags, success = self._get_bipartite_tags(target_type_id=0)
@@ -134,6 +137,12 @@ class HamiltonianModel:
                         # 這裡拋出異常，讓外層 GUI 捕捉並印出 Error Log
                         raise RuntimeError("Bipartite check failed! Lattice is frustrated or NN definition incorrect.")
                     
+            elif mode == 'random':
+                # 隨機 On-site Potential
+                s_val = onsite_config.get('scale', 0.0) 
+                add_on = np.random.rand(N) * s_val  
+                self.H_sparse += sp.diags(add_on-np.mean(add_on))
+
             elif mode == 'laplace':
                 # Laplace term: H = Lap_scale * D - H_hopping
                 # D 是度數矩陣 (Degree Matrix) 或者 onsite energy sum
@@ -145,7 +154,9 @@ class HamiltonianModel:
                 
                 # 簡單做法：直接對目前的 H 取 row sum
                 row_sums = np.array(self.H_sparse.sum(axis=1)).flatten()
-                D = sp.diags(row_sums)
+                col_sums = np.array(self.H_sparse.sum(axis=0)).flatten()
+
+                D = sp.diags((row_sums+col_sums)/2)
                 
                 self.H_sparse = scale * D - self.H_sparse
 

@@ -5,9 +5,9 @@ import traceback
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox,
                              QPushButton, QSplitter, QTextEdit, QScrollArea, 
                              QGroupBox, QFileDialog, QMessageBox, QComboBox, 
-                             QDoubleSpinBox, QGridLayout)
+                             QDoubleSpinBox, QGridLayout , QCheckBox)
 from PyQt6.QtCore import Qt 
-from PyQt6.QtGui import QFont 
+from PyQt6.QtGui import QFont , QTransform
 import pyqtgraph as pg
 from gui.utils import *
 # 引入後端
@@ -53,26 +53,26 @@ class PhysicsCalculationTab(QWidget):
         self.scroll.setWidget(self.controls_container)
 
         title = QLabel("<h2>Hamiltonian Model</h2>")
-        self.controls_layout.addWidget(title)
         title.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        self.controls_layout.addWidget(title)
         # -------------------------------------------------
-        # A. 資料來源區塊 (Geometry Source)
+        # 1.1 資料來源區塊 (Geometry Source)
         # -------------------------------------------------
         self.group_source = QGroupBox("1. Geometry Source")
         self.group_source.setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #555; margin-top: 10px; } QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 3px; }")
         layout_source = QVBoxLayout()
 
-        # 狀態顯示 Label
+        # 1.1.1狀態顯示 Label
         self.lbl_status = QLabel("Status: No Geometry Loaded")
         self.lbl_status.setStyleSheet("color: #FF5555; font-weight: bold;")
         self.lbl_info = QLabel("Sites: 0 | Edges: 0")
         self.lbl_info.setStyleSheet("color: #888;")
 
-        # 按鈕：從 Tab 1 匯入
+        # 1.1.2按鈕：從 Tab 1 匯入
         self.btn_import = QPushButton("Import from Generator Tab")
         self.btn_import.clicked.connect(self.load_from_memory)
         
-        # 按鈕：從檔案讀取
+        # 1.1.3按鈕：從檔案讀取
         self.btn_load_file = QPushButton("Load from .npz File")
         self.btn_load_file.clicked.connect(self.load_from_file)
 
@@ -85,12 +85,12 @@ class PhysicsCalculationTab(QWidget):
         self.controls_layout.addWidget(self.group_source)
 
         # -------------------------------------------------
-        # B. Hamiltonian 設定區塊 (預設鎖定)
+        # 1.2 Hamiltonian 設定區塊 (預設鎖定)
         # -------------------------------------------------
         self.group_hamiltonian = QGroupBox("2. Hamiltonian Settings")
         self.group_hamiltonian.setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #555; margin-top: 10px; } QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 3px; }")
         
-        # 使用 QVBoxLayout 作為主要容器
+        # 1.2.1使用 QVBoxLayout 作為主要容器
         self.layout_ham_main = QVBoxLayout()
         
         # --- Row 1: On-site Term ---
@@ -98,10 +98,10 @@ class PhysicsCalculationTab(QWidget):
         row1.addWidget(QLabel("On-site:"))
         
         self.combo_onsite = QComboBox()
-        self.combo_onsite.addItems(['None', 'Laplace', 'Bipartite'])
+        self.combo_onsite.addItems(['Random', 'Laplace', 'Bipartite'])
         row1.addWidget(self.combo_onsite, 2) # Stretch factor 2
         
-        row1.addWidget(QLabel("Val:"))
+        row1.addWidget(QLabel("Value:"))
         self.spin_onsite_val = QDoubleSpinBox()
         self.spin_onsite_val.setRange(-100, 100)
         self.spin_onsite_val.setSingleStep(0.1)
@@ -131,7 +131,7 @@ class PhysicsCalculationTab(QWidget):
         # --- Row 3+: Hopping Parameters (Dynamic Area) ---
         self.layout_ham_main.addWidget(QLabel("<b>Hopping Parameters (Complex):</b>"))
         
-        # 這裡放置一個容器，之後動態填入 Grid
+        # 1.2.2放置一個容器，之後動態填入 Grid
         self.container_hopping = QWidget()
         self.layout_hopping = QGridLayout(self.container_hopping)
         self.layout_hopping.setContentsMargins(0,0,0,0)
@@ -150,7 +150,7 @@ class PhysicsCalculationTab(QWidget):
         # self.controls_layout.addStretch()
 
         # -------------------------------------------------------------
-        # 3. Electronic State & Analysis 
+        # 1.3 Electronic State & Analysis 
         # -------------------------------------------------------------
         self.group_state = QGroupBox("3. Electronic State & Analysis")
         self.group_state.setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #555; margin-top: 10px; } " \
@@ -158,12 +158,13 @@ class PhysicsCalculationTab(QWidget):
         layout_state = QVBoxLayout()
 
         # === 階段 A: 設定佔據態 (Occupancy) ===
-        # 使用 Frame 包起來，強調這是第一步
+        # 1.3.1使用 Frame 包起來，強調這是第一步
         frame_occ = QFrame()
         frame_occ.setStyleSheet("background-color: #2a2a2a; border-radius: 5px;")
         layout_occ = QVBoxLayout(frame_occ)
         
-        # Row 1: 輸入與按鈕
+        # --- Row 1: 輸入與按鈕
+        layout_occ.addWidget(QLabel("<b>Occupied Energy Window:</b>",styleSheet="color: #FFFFFF; font-weight: bold;font-size: 12px;"))
         row_range = QHBoxLayout()
         
         self.spin_emin = QDoubleSpinBox()
@@ -176,17 +177,17 @@ class PhysicsCalculationTab(QWidget):
         self.spin_emax.setSingleStep(0.1) ; self.spin_emax.setDecimals(2)
 
         self.btn_set_projector = QPushButton("Set")
-        self.btn_set_projector.setFixedWidth(50)
-        self.btn_set_projector.setStyleSheet("background-color: #E65100; color: white; font-weight: bold;")
+        self.btn_set_projector.setFixedWidth(80)
+        with open("gui/tabs/qss/PhyCal_set_button.qss", "r") as f:
+            self.btn_set_projector.setStyleSheet(f.read())
         self.btn_set_projector.clicked.connect(self.run_set_projector)
         
-        row_range.addWidget(QLabel("Range:",styleSheet=" color:#FFFFFF; font-weight:bold;"))
         row_range.addWidget(self.spin_emin)
         row_range.addWidget(self.spin_emax)
         row_range.addWidget(self.btn_set_projector)
         layout_occ.addLayout(row_range)
         
-        # Row 2: 狀態資訊
+        # --- Row 2: 狀態資訊
         self.lbl_occ_info = QLabel("Status: Projector not set")
         self.lbl_occ_info.setStyleSheet("color: #aaa; font-size: 11px; margin-left: 5px;")
         layout_occ.addWidget(self.lbl_occ_info)
@@ -195,43 +196,105 @@ class PhysicsCalculationTab(QWidget):
         layout_state.addWidget(HOLine())
 
         # === 階段 B: 物理量計算模組 (Analysis Modules) ===
-        # 這裡放置縱向排列的功能塊
+        # 1.3.2這裡放置縱向排列的功能塊
         self.layout_modules = QVBoxLayout()
         self.layout_modules.setSpacing(10)
 
-        # 1. Charge Density
+        # 1.3.21 Charge Density
         self._add_analysis_module(
             title="Charge Density",
             btn_text="Plot ρ(r)",
             callback=self.run_calc_charge
         )
 
-        # 2. Angular Momentum (需要額外參數 Cn)
-        # 我們自訂這個區塊因為它有參數輸入
-        frame_am = QGroupBox("Angular Momentum")
-        frame_am.setStyleSheet("QGroupBox { border: 1px solid #444; margin-top: 5px; } QGroupBox::title { color: #ccc; }")
-        l_am = QHBoxLayout(frame_am)
-        l_am.addWidget(QLabel("Sym (Cn):"))
-        self.spin_cn = QSpinBox(); self.spin_cn.setRange(1, 20); self.spin_cn.setValue(5)
-        l_am.addWidget(self.spin_cn)
-        btn_am = QPushButton("Plot Spectrum")
-        btn_am.clicked.connect(self.run_calc_am)
-        l_am.addWidget(btn_am)
-        self.layout_modules.addWidget(frame_am)
-        # 註冊到 module_widgets 以便統一啟用/禁用
-        self.module_widgets.append(frame_am)
-
-        # 3. Chern Marker
+        # 1.3.22 Chern Marker
         self._add_analysis_module(
             title="Chern Marker",
             btn_text="Calc & Plot C(r)",
             callback=self.run_calc_chern
         )
+        # 1.3.23 Angular Momentum (需要額外參數 Cn)
+        # 我們自訂這個區塊因為它有參數輸入
+        frame_am = QGroupBox("Angular Momentum")
+        frame_am.setStyleSheet("QGroupBox { border: 1px solid #444; margin-top: 5px; } QGroupBox::title { color: #aaa; }")
+        l_am = QHBoxLayout(frame_am)
+        l_am.addWidget(QLabel("Sym (C<sub>n</sub>):"))
+        self.spin_cn = QSpinBox(); self.spin_cn.setRange(1, 20); self.spin_cn.setValue(5)
+        l_am.addWidget(self.spin_cn)
+        l_am.addStretch()
+        l_am.addWidget(QLabel("Bins:"))
+        self.spin_am_bins = QSpinBox()
+        self.spin_am_bins.setRange(10, 500)
+        self.spin_am_bins.setValue(100) # AM 預設 100
+        self.spin_am_bins.setFixedWidth(60)
+        l_am.addWidget(self.spin_am_bins)
+
+        btn_am = QPushButton("Plot L")
+        btn_am.clicked.connect(self.run_calc_am)
+        btn_am.setFixedWidth(100)
+        l_am.addWidget(btn_am)
+        self.layout_modules.addWidget(frame_am)
+        # 註冊到 module_widgets 以便統一啟用/禁用
+        self.module_widgets.append(frame_am)
+
+        # 1.3.24 Structure Factor (新增)
+        frame_sf = QGroupBox("Structure Factor S(q)")
+        frame_sf.setStyleSheet("QGroupBox { border: 1px solid #444; margin-top: 5px; } QGroupBox::title { color: #aaa; }")
+        l_sf = QVBoxLayout(frame_sf)
         
-        # 4. 回到 DOS (Optional)
-        btn_back_dos = QPushButton("Back to DOS View")
+        # --- Row 1: 參數
+        r_sf_param = QHBoxLayout()
+        r_sf_param.addWidget(QLabel("Range ±q:"))
+        self.spin_qrange = QDoubleSpinBox(); self.spin_qrange.setRange(1, 100); self.spin_qrange.setValue(20.0)
+        r_sf_param.addWidget(self.spin_qrange)
+        
+        r_sf_param.addWidget(QLabel("Resolution(per axis):"))
+        self.spin_qres = QSpinBox(); self.spin_qres.setRange(50, 2000); self.spin_qres.setValue(400); self.spin_qres.setSingleStep(50)
+        r_sf_param.addWidget(self.spin_qres)
+        l_sf.addLayout(r_sf_param)
+        
+        # --- Row 2: GPU 選項與按鈕
+        r_sf_action = QHBoxLayout()
+        self.check_gpu = QCheckBox("Use GPU"); self.check_gpu.setChecked(True) # 預設開啟
+        self.check_gpu.setStyleSheet("color: #aaa;")
+        r_sf_action.addWidget(self.check_gpu)
+        
+        r_sf_action.addStretch()
+
+        btn_sf = QPushButton("Plot S(q)")
+        btn_sf.clicked.connect(self.run_calc_sf)
+        btn_sf.setFixedWidth(100)
+        r_sf_action.addWidget(btn_sf)
+        l_sf.addLayout(r_sf_action)
+        
+        self.layout_modules.addWidget(frame_sf)
+        self.module_widgets.append(frame_sf)
+
+        # 1.3.25 Density of States
+        # 原本只是一個按鈕，現在改成一個 GroupBox 或 Frame 以容納 SpinBox
+        frame_dos = QGroupBox("Density of States (DOS)")
+        frame_dos.setStyleSheet("QGroupBox { border: 1px solid #444; margin-top: 5px; } \
+                                QGroupBox::title { color: #aaa; }")
+        l_dos = QHBoxLayout(frame_dos)
+        l_dos.setContentsMargins(5, 15, 5, 5)
+
+        # Bins 參數
+        l_dos.addStretch()
+        l_dos.addWidget(QLabel("Bins:"))
+        self.spin_dos_bins = QSpinBox()
+        self.spin_dos_bins.setRange(10, 1000)
+        self.spin_dos_bins.setValue(200) # DOS 預設 200，解析度高一點
+        self.spin_dos_bins.setFixedWidth(60)
+        l_dos.addWidget(self.spin_dos_bins)
+        
+        # 按鈕
+        btn_back_dos = QPushButton("Plot DOS")
         btn_back_dos.clicked.connect(self._plot_dos_histogram)
-        self.layout_modules.addWidget(btn_back_dos)
+        btn_back_dos.setFixedWidth(100)
+        l_dos.addWidget(btn_back_dos)
+
+        self.layout_modules.addWidget(frame_dos)
+        self.module_widgets.append(frame_dos)
 
         layout_state.addLayout(self.layout_modules)
 
@@ -251,11 +314,11 @@ class PhysicsCalculationTab(QWidget):
         right_splitter = QSplitter(Qt.Orientation.Vertical)
         right_splitter.setHandleWidth(5)
 
-        # Plot Widget
+        # 2.1 Plot Widget
         self.plot_widget = pg.PlotWidget(background='#1e1e1e') # 給個預設值就好
         right_splitter.addWidget(self.plot_widget)
 
-        # Terminal
+        # 2.2 Terminal
         self.terminal = QTextEdit()
         self.terminal.setReadOnly(True)
         self.terminal.setStyleSheet("background-color: #0c0c0c; color: #ccc; font-family: Consolas;")
@@ -279,7 +342,7 @@ class PhysicsCalculationTab(QWidget):
         main_layout.addWidget(main_splitter)
 
     # =================================================
-    #  Logic Methods
+    #  -- Methods --
     # =================================================
     
     def log(self, message, level="INFO"):
@@ -403,7 +466,11 @@ class PhysicsCalculationTab(QWidget):
     def run_construct_and_solve(self):
         """建構 H -> 估算資源 -> 對角化 -> 畫 DOS"""
         if self.hamiltonian_model is None: return
-        
+        # 防呆邏輯：開始前先鎖定並重置狀態 
+        self.group_state.setEnabled(False)        # 鎖定整個區塊
+        self._set_modules_enabled(False)          # 鎖定物理量計算按鈕 (Charge, Chern...)
+        self.lbl_occ_info.setText("Status: Projector not set") 
+        self.lbl_occ_info.setStyleSheet("color: #aaa; font-size: 11px; margin-left: 5px;")
         try:
             # -----------------------------------------------------
             # 1. 讀取參數 & 建構 Hamiltonian (Sparse)
@@ -412,8 +479,9 @@ class PhysicsCalculationTab(QWidget):
             onsite_mode = self.combo_onsite.currentText().lower()
             onsite_val = self.spin_onsite_val.value()
             onsite_config = None
-            if onsite_mode == 'laplace': onsite_config = {'type': 'laplace', 'scale': onsite_val}
-            elif onsite_mode == 'bipartite': onsite_config = {'type': 'bipartite', 's': onsite_val}
+            if onsite_mode == 'random': onsite_config = {'type': 'random', 'scale': onsite_val}
+            elif onsite_mode == 'laplace': onsite_config = {'type': 'laplace', 'scale': onsite_val}
+            elif onsite_mode == 'bipartite': onsite_config = {'type': 'bipartite', 'scale': onsite_val}
 
             gauge_mode = self.combo_gauge.currentText()
             b_flux = self.spin_flux.value()
@@ -478,12 +546,16 @@ class PhysicsCalculationTab(QWidget):
             # -----------------------------------------------------
             self._plot_dos_histogram()
             
-            # 解鎖 Electronic State 區塊
+            # 解鎖 Energy range 及 set 按鈕
             self.group_state.setEnabled(True)
+            self._set_modules_enabled(False)       
             self.log("Hamiltonian solved. You can now set occupied states.", "INFO")
+
         except Exception as e:
             self.log(f"Process Error: {e}", "ERROR")
             traceback.print_exc()
+            # 如果失敗，確保區塊保持鎖定
+            self.group_state.setEnabled(False)
 
     def _plot_dos_histogram(self):
         if self.analyzer.eigenvalues is None: return
@@ -499,10 +571,10 @@ class PhysicsCalculationTab(QWidget):
             text_color="#FFFCD8"   # 淺灰文字
         )
         
-        # --- 2. 計算 Histogram 數據 ---
-        n_bins = int(np.sqrt(len(evals))) + 10
-        if n_bins > 500: n_bins = 500
+        # --- 2. 讀取 UI bins ---
+        n_bins = self.spin_dos_bins.value()
         
+        # --- 3. 計算 Histogram 數據 ---
         y, x_edges = np.histogram(evals, bins=n_bins)
         x_centers = (x_edges[:-1] + x_edges[1:]) / 2
         width = x_edges[1] - x_edges[0]
@@ -520,60 +592,77 @@ class PhysicsCalculationTab(QWidget):
         self.plot_widget.addItem(bar_item)
         self.plot_widget.autoRange()
 
-    def _plot_scatter_heatmap(self, pos, values, cmap='viridis', symmetrical=False):
+    def _plot_scatter_heatmap(self, pos, values, cmap='viridis', adjust_range: Union[bool, Tuple[float, float]] = False):
         """
-        輔助函數：畫散點熱圖
+        輔助函數：畫散點熱圖 (包含 Hover Data 功能)
         """
+        # 用最開始的兩個點距離來估計scatter的大小
+        recommand_dot_size = 0.5 * np.linalg.norm(self.current_geometry.positions[1] - self.current_geometry.positions[0])
+        recommand_dot_size = max(0.2, recommand_dot_size)
         self.plot_widget.clear()
         
-        # 1. 數值正規化 (Normalize)
-        if symmetrical:
-            # 對稱範圍 (例如 -1 到 1)，適合看 Chern Marker
+        # 1. 數值正規化 (用於計算顏色)
+        if adjust_range == True:
             limit = max(abs(np.min(values)), abs(np.max(values)))
             if limit == 0: limit = 1
-            norm_values = (values + limit) / (2 * limit) # 映射到 0~1
+            norm_values = (values + limit) / (2 * limit)
+        elif isinstance(adjust_range, tuple):
+            v_min, v_max = adjust_range
+            if v_max == v_min: norm_values = np.zeros_like(values)
+            else: norm_values = (values - v_min) / (v_max - v_min)
         else:
-            # 一般範圍 (0 到 Max)，適合看 Charge
             v_min, v_max = np.min(values), np.max(values)
             if v_max == v_min: norm_values = np.zeros_like(values)
             else: norm_values = (values - v_min) / (v_max - v_min)
 
-        # 2. 產生顏色筆刷 (Brushes)
-        # PyQtGraph 內建了一些 colormap，也可以自己定義
-        # 這裡我們手動用 matplotlib 的 colormap (如果有的話) 或簡單插值
+        # 2. 產生顏色筆刷
         import matplotlib.cm as cm
-        colormap = cm.get_cmap(cmap)
-        
-        # 轉換為 QColor
+        try:
+            colormap = cm.get_cmap(cmap)
+        except:
+            colormap = cm.viridis # Fallback
+
         brushes = []
         for val in norm_values:
-            # colormap 回傳 (r, g, b, a) 範圍 0-1
             rgba = colormap(val) 
             color = [int(c * 255) for c in rgba]
             brushes.append(pg.mkBrush(color[0], color[1], color[2], 255))
             
-        # 3. 繪製
-        # 為了效能，PyQtGraph 的 setData 支援 list of brushes
-        self.plot_widget.addItem(pg.ScatterPlotItem(
-            x=pos[:, 0], y=pos[:, 1],
-            size=8, # 點的大小
+        # 3. 建立 Scatter Plot Item
+        scatter = pg.ScatterPlotItem(
+            x=pos[:, 0], 
+            y=pos[:, 1],
+            size=recommand_dot_size,
             brush=brushes,
-            pen=None, # 無邊框
-            hoverable=True # 滑鼠懸停顯示數值 (進階功能，需額外實作)
-        ))
+            pen=None,
+
+            #像素點大小模式: True=以像素為單位，False=以數值為單位(隨座標縮放)
+            pxMode=False,
+            #傳入原始數據
+            data=values,  
+            
+            #啟用懸停功能
+            hoverable=True,
+            hoverSymbol='o',    # 懸停時的樣式
+            hoverSize=1.3*recommand_dot_size,        # 懸停時變大 (可選)
+        )
         
-        # 加入 Colorbar (雖然 PyQtGraph 加 Colorbar 比較麻煩，這裡先用 Log 顯示範圍)
+        # 關鍵修改 C: 連接信號
+        # 當滑鼠懸停時，呼叫我們寫好的 _on_scatter_hovered
+        scatter.sigHovered.connect(self._on_scatter_hovered)
+        
+        self.plot_widget.addItem(scatter)
+        
+        # 加入簡單的數值範圍 Log
         self.log(f"Value Range: [{np.min(values):.4f}, {np.max(values):.4f}]", "DATA")
         self.plot_widget.autoRange()
 
-    def _plot_histogram(self, data, color):
+    def _plot_histogram(self, data, color , bins):
         """輔助函數：畫直方圖"""
         self.plot_widget.clear()
         if len(data) == 0: return
         
-        # 自動判定bins數量
-        n_bins = int(np.sqrt(len(data)))
-        if n_bins > 500: n_bins = 500
+        n_bins = bins
 
         y, x_edges = np.histogram(data, bins=n_bins)
         x_centers = (x_edges[:-1] + x_edges[1:]) / 2
@@ -586,7 +675,7 @@ class PhysicsCalculationTab(QWidget):
     def _add_analysis_module(self, title, btn_text, callback):
         """輔助函數：快速建立標準的物理量計算區塊"""
         group = QGroupBox(title)
-        group.setStyleSheet("QGroupBox { border: 1px solid #444; margin-top: 5px; } QGroupBox::title { color: #ccc; }")
+        group.setStyleSheet("QGroupBox { border: 1px solid #444; margin-top: 5px; } QGroupBox::title { color: #999; }")
         layout = QHBoxLayout(group)
         layout.setContentsMargins(5, 15, 5, 5) # 上邊距留給 Title
         
@@ -623,7 +712,7 @@ class PhysicsCalculationTab(QWidget):
             self.lbl_occ_info.setText(f"Occupied: {n_occ} / {n_total} ({ratio:.1f}%)")
             self.lbl_occ_info.setStyleSheet("color: #4CAF50; font-weight: bold; margin-left: 5px;")
             
-            # 3. ★ 解鎖物理量計算區塊 ★
+            # 3. 解鎖物理量計算區塊
             self._set_modules_enabled(True)
             self.log("Projector ready. Choose a quantity to calculate.", "INFO")
             
@@ -631,19 +720,6 @@ class PhysicsCalculationTab(QWidget):
             self.log(f"Set Projector Error: {e}", "ERROR")
             traceback.print_exc()
             self._set_modules_enabled(False) # 失敗則鎖定
-
-    # --- 獨立的計算觸發函數 ---
-
-    def run_calc_charge(self):
-        self._visualize_generic("charge")
-
-    def run_calc_chern(self):
-        self._visualize_generic("chern")
-
-    def run_calc_am(self):
-        # 讀取當前的 Cn 設定
-        cn_val = self.spin_cn.value()
-        self._visualize_generic("am", cn=cn_val)
 
     def _visualize_generic(self, mode, **kwargs):
         """核心繪圖調度邏輯 (合併原本的 visualize_quantity)"""
@@ -657,29 +733,48 @@ class PhysicsCalculationTab(QWidget):
             if mode == "charge":
                 self.log("Calculating Charge Density...", "INFO")
                 values = self.analyzer.calculate_charge_density()
-                self._configure_plot("Charge Density ρ(r)", "X", "Y", background='#FFFFFF', text_color='#000000')
-                self._plot_scatter_heatmap(pos, values, cmap='viridis')
+                self._configure_plot("Charge Density ρ(r)", "X", "Y", background="#9C9C9C", text_color="#000000", lock_aspect=True)
+                self._plot_scatter_heatmap(pos, values, cmap='Blues', adjust_range=(0,1))
                 
             elif mode == "chern":
                 self.log("Calculating Local Chern Marker...", "INFO")
                 values = self.analyzer.calculate_chern_marker()
-                self._configure_plot("Local Chern Marker C(r)", "X", "Y", background='#FFFFFF', text_color='#000000')
-                self._plot_scatter_heatmap(pos, values, cmap='bwr', symmetrical=True)
+                self._configure_plot("Local Chern Marker C(r)", "X", "Y", background="#9C9C9C", text_color="#000000", lock_aspect=True)
+                self._plot_scatter_heatmap(pos, values, cmap='bwr', adjust_range=True)
                 
             elif mode == "am":
                 cn = kwargs.get('cn', 5)
+                bins = kwargs.get('bins', 100)
                 self.log(f"Calculating AM Spectrum (C{cn})...", "INFO")
                 l_vals = self.analyzer.get_am_spectrum(Cn=cn)
                 self._configure_plot(f"AM Spectrum (C{cn})", "Lz", "Count", background='#121212', text_color='#CCC')
-                self._plot_histogram(l_vals, color='#FF5722')
+                self._plot_histogram(l_vals, color='#FF5722', bins=bins)
+
+            elif mode == "sf":
+                q_r = kwargs.get('q_range', 20.0)
+                res = kwargs.get('res', 400)
+                gpu = kwargs.get('use_gpu', True)
+                
+                self.log(f"Calculating Structure Factor (Range: ±{q_r}, Res: {res})...", "INFO")
+                
+                # 呼叫後端 (回傳 2D array 和 extent)
+                sf_data, extent = self.analyzer.calculate_structure_factor(q_range=q_r, resolution=res, use_gpu=gpu)
+                
+                # 設定繪圖區
+                self._configure_plot(
+                    "Structure Factor S(q)", "qx", "qy", 
+                    background='#000000', # S(q) 通常背景全黑看起來比較清楚
+                    text_color='#CCC',
+                    lock_aspect=True      # q空間也需要鎖定比例
+                )
+                
+                # 呼叫專用的 Image 繪圖函式
+                self._plot_image_heatmap(sf_data, extent, cmap='inferno') # inferno 適合看亮點
 
         except Exception as e:
             self.log(f"Calc Error ({mode}): {e}", "ERROR")
             traceback.print_exc()
 
-    # =================================================
-    #  Helper Methods
-    # =================================================
     def estimate_resources(self, N: int):
         """
         估算資源消耗
@@ -731,13 +826,13 @@ class PhysicsCalculationTab(QWidget):
         scrollbar = self.terminal.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
 
-    def _configure_plot(self, title, x_label, y_label, background='#121212', text_color='#AAAAAA'):
+    def _configure_plot(self, title, x_label, y_label, background='#121212', text_color='#AAAAAA', lock_aspect=False):
             """
             通用繪圖設定：在每次繪圖前呼叫此函數來重置樣式。
             """
             # 1. 設定背景
             self.plot_widget.setBackground(background)
-            
+            self.plot_widget.setAspectLocked(lock_aspect)
             # 2. 設定標題
             self.plot_widget.setTitle(title, color=text_color, size='14pt')
             
@@ -761,3 +856,141 @@ class PhysicsCalculationTab(QWidget):
             
             # 5. 清除舊內容
             self.plot_widget.clear()
+    
+    def _on_scatter_hovered(self, obj, points):
+        """
+        當滑鼠懸停在散點上時觸發。
+        obj: 觸發事件的 ScatterPlotItem
+        points: 被懸停的點的列表 (list of SpotItem)
+        """
+        if len(points) > 0:
+            # 取得第一個被指到的點 (通常滑鼠只會指到一個)
+            point = points[0]
+            
+            # 讀取座標
+            pos = point.pos()
+            x, y = pos.x(), pos.y()
+            
+            # 讀取我們存入的數據 (透過 .data() 方法)
+            val = point.data()
+            
+            # 設定 Tooltip 顯示資訊
+            # 格式: X: 1.234, Y: 5.678, Val: 0.9876
+            tooltip_text = f"X: {x:.4f}\nY: {y:.4f}\nValue: {val:.4e}"
+            
+            # 將 Tooltip 設定給 PlotWidget
+            self.plot_widget.setToolTip(tooltip_text)
+        else:
+            # 如果滑鼠移開了，清除 Tooltip 或顯示預設訊息
+            self.plot_widget.setToolTip("")
+
+    def run_calc_sf(self):
+            """觸發結構因子計算"""
+            q_range = self.spin_qrange.value()
+            res = self.spin_qres.value()
+            use_gpu = self.check_gpu.isChecked()
+            
+            self._visualize_generic("sf", q_range=q_range, res=res, use_gpu=use_gpu)
+
+    def _plot_image_heatmap(self, data, extent, cmap='inferno' , adjust_range: Union[None, Tuple[float, float]] = None):
+        """
+        繪製規則網格熱圖 (For Structure Factor)
+        Args:
+            data: 2D numpy array
+            extent: [xmin, xmax, ymin, ymax]
+            cmap: matplotlib colormap name
+            adjust_range: (Tuple[float, float] or None)是否根據數據自動調整顏色範圍
+        """
+        self.plot_widget.clear()
+        
+        # 1. 處理 Colormap
+        import matplotlib.cm as cm
+        try:
+            # 獲取 colormap (0~1 -> RGBA)
+            colormap = cm.get_cmap(cmap)
+            # 建立 lookup table (256x4)
+            lut = (colormap(np.linspace(0, 1, 256)) * 255).astype(np.uint8)
+        except:
+            lut = None # Fallback to default grey
+            
+        # 2. 建立 ImageItem
+        # PyQtGraph 的 ImageItem 預設是 (width, height)，且轉置的
+        # 我們通常需要轉置 data 以符合直覺 (x軸對應 column, y軸對應 row)
+        # 注意: data.T 或是保持原樣取決於後端計算時 x, y 的順序
+        # 假設 calculate_structure_factor 產出的是 [ix, iy]，則不需要轉置
+        
+        img_item = pg.ImageItem(data)
+        
+        # 套用 Colormap
+        if lut is not None:
+            img_item.setLookupTable(lut)
+            
+        # 3. 設定座標範圍 (Transform)
+        # 預設 ImageItem 畫在 [0, width] x [0, height]
+        # 我們需要將其縮放和平移到 extent 指定的範圍
+        xmin, xmax, ymin, ymax = extent
+        
+        width = xmax - xmin
+        height = ymax - ymin
+        data_width = data.shape[0]
+        data_height = data.shape[1]
+        
+        # 計算縮放比例
+        scale_x = width / data_width
+        scale_y = height / data_height
+        
+        # 設定變換矩陣: 先縮放，再平移
+        tr = QTransform()
+        tr.translate(xmin, ymin)
+        tr.scale(scale_x, scale_y)
+        img_item.setTransform(tr)
+        
+        self.plot_widget.addItem(img_item)
+        
+        # 加入簡單的 Colorbar 說明 (Log)
+        v_max = np.max(data)
+        self.log(f"Max Intensity: {v_max:.4e}", "DATA")
+        
+        # 加入 Hover 顯示數值 (Optional, 針對 ImageItem 比較複雜，這裡先略過或簡單實作)
+        self.plot_widget.autoRange()
+
+        # 儲存目前的 image item 引用，供 hover event 使用
+        self.current_image_item = img_item 
+        
+        # 連接滑鼠移動事件 (如果還沒連接過)
+        if not hasattr(self, '_hover_connected'):
+            self.plot_widget.scene().sigMouseMoved.connect(self._on_image_hover)
+            self._hover_connected = True
+
+    def _on_image_hover(self, pos):
+        """處理 ImageItem 的滑鼠懸停數值顯示"""
+        # 檢查是否當前是畫 Image 模式
+        if not hasattr(self, 'current_image_item') or self.current_image_item is None:
+            return
+
+        # 將視窗座標轉為 Plot 座標
+        mouse_point = self.plot_widget.plotItem.vb.mapSceneToView(pos)
+        x, y = mouse_point.x(), mouse_point.y()
+        
+        # 嘗試從 ImageItem 獲取對應的 pixel value
+        # mapFromScene 比較複雜，這裡用簡單的座標反推
+        # 假設我們知道 extent 和 data shape... 
+        # 為了簡化，pyqtgraph 提供了 mapFromView 嗎？沒有直接的。
+        
+        # 這裡用更簡單的方法：利用我們存在 plot_widget 裡的 data (如果有的話)
+        # 或者直接顯示座標就好，數值看顏色
+        self.plot_widget.setToolTip(f"qx: {x:.2f}, qy: {y:.2f}")
+
+    # --- 獨立的計算觸發函數 ---
+
+    def run_calc_charge(self):
+        self._visualize_generic("charge")
+
+    def run_calc_chern(self):
+        self._visualize_generic("chern")
+
+    def run_calc_am(self):
+        # 讀取當前的 Cn 設定
+        cn_val = self.spin_cn.value()
+        bins_val = self.spin_am_bins.value()
+        self._visualize_generic("am", cn=cn_val)

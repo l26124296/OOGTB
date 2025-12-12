@@ -1,0 +1,33 @@
+QTabWidget::pane {
+    border: none solid #888;
+    background: white;
+}
+
+QTabBar::tab {
+    background: #cccccc;
+
+    padding: 2px 2px;
+    border: 1px solid #888;
+    border-bottom: none;
+    border-top-left-radius: 1px;
+    border-top-right-radius: 1px;
+    height: 20px;
+    width: 150px;
+    color: #333;
+    font-size: 12px;
+    font-weight: normal;
+    font-family: "Arials";
+}
+
+QTabBar::tab:selected {
+    background: #ffffff;
+    color: black;
+}
+
+QTabBar::tab:hover {
+    background: #d3dee9ff;
+}
+
+QTabBar::tab:!selected {
+    margin-top: 2px;
+}
