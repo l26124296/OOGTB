@@ -47,7 +47,7 @@ class ElectronicState:
             self.diagonalize()
             
         self.energy_range = (E_min, E_max)
-        self.occupancy_mask = self.eigenvalues <= E_max and self.eigenvalues >= E_min
+        self.occupancy_mask = (self.eigenvalues <= E_max) & (self.eigenvalues >= E_min)
         
         n_occ = np.sum(self.occupancy_mask)
         n_total = len(self.eigenvalues)

@@ -247,8 +247,8 @@ class LatticeGeneratorTab(QWidget):
         for i in range(self.current_n_basis):
             row = QHBoxLayout()
             row.addWidget(QLabel(f"{i}:"))
-            bx = QDoubleSpinBox(); bx.setRange(-10,10); bx.setSingleStep(0.1); bx.setPrefix("x: ")
-            by = QDoubleSpinBox(); by.setRange(-10,10); by.setSingleStep(0.1); by.setPrefix("y: ")
+            bx = QDoubleSpinBox(); bx.setRange(-10,10); bx.setSingleStep(0.1); bx.setPrefix("x: ") ; bx.setDecimals(4)
+            by = QDoubleSpinBox(); by.setRange(-10,10); by.setSingleStep(0.1); by.setPrefix("y: ") ; by.setDecimals(4)
             row.addWidget(bx)
             row.addWidget(by)
             b_layout.addLayout(row)
@@ -277,8 +277,8 @@ class LatticeGeneratorTab(QWidget):
             
             w_b1 = QSpinBox(); w_b1.setRange(0, self.current_n_basis-1)
             w_b2 = QSpinBox(); w_b2.setRange(0, self.current_n_basis-1)
-            w_dx = QSpinBox(); w_dx.setRange(-5, 5)
-            w_dy = QSpinBox(); w_dy.setRange(-5, 5)
+            w_dx = QSpinBox(); w_dx.setRange(-10, 10)
+            w_dy = QSpinBox(); w_dy.setRange(-10, 10)
             w_desc = QLineEdit("NN")
             
             row.addWidget(w_b1, 1)

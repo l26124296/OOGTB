@@ -339,8 +339,8 @@ class HamiltonianModel:
         normality_err = np.sqrt(np.sum(np.abs(A.data)**2))  # Frobenius norm of commutator
         is_normal = normality_err <= 1e-8  # threshold, may adjust
         # Check R^n == I (use repeated multiplication)
-        I = np.identity(N, dtype=np.complex128, format='csr')
-        Rpow = np.identity(N, dtype=np.complex128, format='csr')
+        I = sp.identity(N, dtype=np.complex128, format='csr')
+        Rpow = sp.identity(N, dtype=np.complex128, format='csr')
         for _ in range(n):
             Rpow = R.dot(Rpow)
         D = (Rpow - I).tocoo()
@@ -389,7 +389,7 @@ class HamiltonianModel:
             R = self.build_rotation_operator(Cn)
             N = R.shape[0]
             omega = np.exp(2j * np.pi / Cn)
-            I = np.identity(N, dtype=dtype, format='csr')
+            I = sp.identity(N, dtype=dtype, format='csr')
             
             # powers of R
             R_powers = [I]
