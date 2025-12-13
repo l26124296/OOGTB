@@ -3,7 +3,7 @@ import scipy.sparse as sp
 import warnings
 from scipy.spatial import cKDTree
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Tuple, Union
+from typing import Dict, Optional, Tuple
 
 # 引入您定義的幾何結構
 from core.GeometryData import SimplicialComplex

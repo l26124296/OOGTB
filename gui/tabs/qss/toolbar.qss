@@ -1,0 +1,26 @@
+QToolBar {
+    background-color: #333;
+    border: none;
+}
+
+QLabel {
+    color: white;
+    background: transparent; 
+    border: none;            
+    font-size: 10pt;
+    padding: 0px;            
+}
+
+QToolButton {
+    background: transparent;
+    border: none;
+    color: white;
+    padding: 3px;
+}
+QToolButton:hover {
+    background-color: #555;
+    border-radius: 3px;
+}
+QToolButton:checked {
+    background-color: #4CAF50; 
+}

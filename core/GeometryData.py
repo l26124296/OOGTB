@@ -33,9 +33,10 @@ class SimplicialComplex:
         print(f"[Data] Saved {len(self.positions)} sites, {len(self.edges)} edges to {filename}")
 
     @classmethod
-    def load(cls, filename: str) -> 'SimplicialComplex':
+    def load(cls, filename: str) :
         """
         從 .npz 檔案讀取並重建 SimplicialComplex 物件
+        (存的東西不是SimplicialComplex)
         """
         try:
             # allow_pickle=True 是必須的，因為我們存了 dict 和 list

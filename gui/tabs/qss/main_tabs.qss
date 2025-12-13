@@ -1,0 +1,26 @@
+QTabWidget#MainSideBar::pane { 
+    border: 0px solid #444; 
+    background: #f0f0f0; 
+}
+QTabWidget#MainSideBar>QTabBar::tab { 
+    height: 50px; 
+    width: 50px; 
+    font-size: 14px;
+    font-weight: bold;
+    color: #aaa;
+    background: #c3dbfb; 
+    border: none;
+    padding-left: 10px;
+    text-align: left;
+    border-top-left-radius: 3px;
+    border-bottom-left-radius: 3px;
+
+}
+QTabWidget#MainSideBar>QTabBar::tab:selected { 
+    color: #ffffff;
+    background: #ededed; 
+    border-left: 4px solid #2e7dff; 
+}
+QTabWidget#MainSideBar>QTabBar::tab:hover {
+    background: #a9c2e2ff;
+            }

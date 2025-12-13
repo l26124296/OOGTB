@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QStackedWidget,
                              QPushButton, QSplitter, QScrollArea, QGroupBox, 
                              QComboBox, QDoubleSpinBox, QSpinBox, QLineEdit, 
                              QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView,
@@ -6,8 +6,15 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 from PyQt6.QtCore import Qt 
 from PyQt6.QtGui import QFont
 import numpy as np
+import os
 import traceback
 import pickle
+
+# --- Matplotlib Integration ---
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
+from matplotlib.figure import Figure
+from matplotlib.colors import LinearSegmentedColormap
 
 # 後端
 from core.PhysicsModel import HamiltonianModel 
@@ -16,7 +23,6 @@ from core.Butterfly import Entomologist, ButterflyCage
 
 # 輔助工具
 
-from gui.utils import HOLine 
 from asteval import Interpreter
 aeval = Interpreter()
 
@@ -63,18 +69,17 @@ class ButterflyTab(QWidget):
         self._init_group_model()
         self._init_group_sweep()
         self._init_group_exec()
-
+        self._init_group_graphic_params()
         self.controls_layout.addStretch()
+        self._init_group_sl()
 
         # Right Panel
-        self.right_panel = QLabel("Visualization Area\n(Run calculation to see results)")
-        self.right_panel.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.right_panel.setStyleSheet("background: #222; color: #777; font-size: 16px;")
+        self.plotter = ButterflyPlotter()
 
         # Splitter
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
         self.splitter.addWidget(self.scroll)
-        self.splitter.addWidget(self.right_panel)
+        self.splitter.addWidget(self.plotter)
         self.splitter.setStretchFactor(1, 1)
         
         main_layout.addWidget(self.splitter)
@@ -95,7 +100,7 @@ class ButterflyTab(QWidget):
         btn_import = QPushButton("Import from Generator")
         btn_import.clicked.connect(self.load_geometry_from_generator)
         
-        btn_load = QPushButton("Load File (.npz/.pkl)")
+        btn_load = QPushButton("Load File (.npz)")
         btn_load.clicked.connect(self.load_geometry_from_file)
         
         h_btns.addWidget(btn_import)
@@ -126,7 +131,7 @@ class ButterflyTab(QWidget):
         layout.addWidget(self.container_hopping)
         
         # 預設提示
-        self.grid_hopping.addWidget(QLabel("(Load Geometry first)"), 0, 0)
+        self.grid_hopping.addWidget(QLabel("<font color='#FF5555'>Load Geometry to define hopping</font>"), 0, 0)
 
         self.controls_layout.addWidget(self.group_model)
 
@@ -135,20 +140,15 @@ class ButterflyTab(QWidget):
         layout = QVBoxLayout(self.group_sweep)
         
         self.tab_sweep = QTabWidget()
-        try:
-            with open('./gui/tabs/qss/butterfly_modes_tab.qss', 'r') as f:
-                self.tab_sweep.setStyleSheet(f.read())
-        except FileNotFoundError:
-            pass # 忽略樣式檔錯誤
 
         # --- Tab 1: 1D Sweep ---
         w_1d = QWidget()
         l_1d = QGridLayout(w_1d)
-        self.spin_flux_min = QDoubleSpinBox(); self.spin_flux_min.setRange(0, 10); self.spin_flux_min.setValue(0.0); self.spin_flux_min.setSingleStep(0.01)
-        self.spin_flux_max = QDoubleSpinBox(); self.spin_flux_max.setRange(0, 10); self.spin_flux_max.setValue(1.0); self.spin_flux_max.setSingleStep(0.01)
+        self.spin_flux_min = QDoubleSpinBox(); self.spin_flux_min.setRange(-100, 100); self.spin_flux_min.setValue(-3.14); self.spin_flux_min.setSingleStep(0.01)
+        self.spin_flux_max = QDoubleSpinBox(); self.spin_flux_max.setRange(-100, 100); self.spin_flux_max.setValue(3.14); self.spin_flux_max.setSingleStep(0.01)
         
-        l_1d.addWidget(QLabel("Min Flux:"), 0, 0); l_1d.addWidget(self.spin_flux_min, 0, 1)
-        l_1d.addWidget(QLabel("Max Flux:"), 1, 0); l_1d.addWidget(self.spin_flux_max, 1, 1)
+        l_1d.addWidget(QLabel("Min Flux Density:"), 0, 0); l_1d.addWidget(self.spin_flux_min, 0, 1)
+        l_1d.addWidget(QLabel("Max Flux Density:"), 1, 0); l_1d.addWidget(self.spin_flux_max, 1, 1)
         self.tab_sweep.addTab(w_1d, "1D Sweep")
         
         # --- Tab 2: 2D Path ---
@@ -157,16 +157,16 @@ class ButterflyTab(QWidget):
         
         # Areas
         h_area = QHBoxLayout()
-        self.edit_area1 = QLineEdit("1.0"); self.edit_area1.setPlaceholderText("A_thin")
-        self.edit_area2 = QLineEdit("0.618"); self.edit_area2.setPlaceholderText("A_thick")
+        self.edit_area1 = QLineEdit("sin(pi/5)"); self.edit_area1.setPlaceholderText("A_thin")
+        self.edit_area2 = QLineEdit("sin(2*pi/5)"); self.edit_area2.setPlaceholderText("A_thick")
         h_area.addWidget(QLabel("Area 1:")); h_area.addWidget(self.edit_area1)
         h_area.addWidget(QLabel("Area 2:")); h_area.addWidget(self.edit_area2)
         l_2d.addLayout(h_area)
         
         # Path Table
-        l_2d.addWidget(QLabel("Flux Path (xi, eta):"))
+        l_2d.addWidget(QLabel("Flux Path (Φ1,Φ2):"))
         self.table_path = QTableWidget(2, 2)
-        self.table_path.setHorizontalHeaderLabels(["Flux 1 (xi)", "Flux 2 (eta)"])
+        self.table_path.setHorizontalHeaderLabels(["Flux 1 ", "Flux 2 "])
         self.table_path.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table_path.setItem(0,0, QTableWidgetItem("0.0")); self.table_path.setItem(0,1, QTableWidgetItem("0.0"))
         self.table_path.setItem(1,0, QTableWidgetItem("1.0")); self.table_path.setItem(1,1, QTableWidgetItem("1.0"))
@@ -199,11 +199,11 @@ class ButterflyTab(QWidget):
         
         h_act = QHBoxLayout()
         self.btn_run = QPushButton("Run Calculation")
-        self.btn_run.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold; padding: 8px;")
+        self.btn_run.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold; padding: 4px; width: 50px;")
         self.btn_run.clicked.connect(self.run_calculation)
         
         self.btn_abort = QPushButton("Abort")
-        self.btn_abort.setStyleSheet("background-color: #F44336; color: white; font-weight: bold; padding: 8px;")
+        self.btn_abort.setStyleSheet("background-color: #F44336; color: white; font-weight: bold; padding: 4px;width: 50px;")
         self.btn_abort.setEnabled(False)
         self.btn_abort.clicked.connect(self.abort_calculation)
         
@@ -217,6 +217,89 @@ class ButterflyTab(QWidget):
         
         self.controls_layout.addWidget(group)
 
+    def _init_group_graphic_params(self):
+    
+        group = QGroupBox("5. Graphic Parameters")
+        layout = QVBoxLayout(group)
+        
+        h_res = QHBoxLayout()
+        
+        self.combo_plot_modes = QComboBox()
+        self.combo_plot_modes.addItems(['Plot Lines', 'Plot Density'])
+        h_res.addWidget(QLabel("Plot Mode:"))
+        h_res.addWidget(self.combo_plot_modes)
+
+        layout.addLayout(h_res)
+
+        self.plot_mode_stack = QStackedWidget()
+        layout.addWidget(self.plot_mode_stack)
+
+        # === Plot Lines page ===
+        plot_lines_widget = QWidget()
+        plot_lines_layout = QHBoxLayout(plot_lines_widget)
+        plot_lines_layout.addStretch()
+        plot_lines_layout.addWidget(QLabel("Line width:"))
+
+        self.spin_line_width = QDoubleSpinBox()
+        self.spin_line_width.setRange(0, 10); self.spin_line_width.setSingleStep(0.1); self.spin_line_width.setValue(0.6)    
+        self.spin_line_width.setDecimals(1); self.spin_line_width.setStyleSheet("width: 50px;")
+        plot_lines_layout.addWidget(self.spin_line_width)
+
+        self.plot_mode_stack.addWidget(plot_lines_widget)
+
+        # === Plot Density page ===
+        plot_density_widget = QWidget()
+        plot_density_layout = QHBoxLayout(plot_density_widget)
+        plot_density_layout.addStretch()
+        plot_density_layout.addWidget(QLabel("Bins(x,y):"))
+
+        self.spin_bins_L = QSpinBox()
+        self.spin_bins_L.setRange(0, 2048); self.spin_bins_L.setSingleStep(16); self.spin_bins_L.setValue(128)
+        self.spin_bins_L.setStyleSheet("width: 50px;") ; self.spin_bins_L
+
+        self.spin_bins_R = QSpinBox()
+        self.spin_bins_R.setRange(0, 2048); self.spin_bins_R.setSingleStep(16); self.spin_bins_R.setValue(128)
+        self.spin_bins_R.setStyleSheet("width: 50px;")
+        
+        plot_density_layout.addWidget(self.spin_bins_L)
+        plot_density_layout.addWidget(self.spin_bins_R)
+
+        self.plot_mode_stack.addWidget(plot_density_widget)
+
+        # ---------- ComboBox 控制 Stack ----------
+        self.combo_plot_modes.currentIndexChanged.connect(
+            self.plot_mode_stack.setCurrentIndex)
+        self.controls_layout.addWidget(group)
+        
+    def _init_group_sl(self):
+        # -----------------------------------------------------
+        # [新增] 資料管理區域 (Data Management Group)
+        # -----------------------------------------------------
+        data_group = QGroupBox()
+        data_layout = QHBoxLayout()
+        
+        # 儲存按鈕
+        self.btn_save = QPushButton("Save Butterfly")
+        self.btn_save.setStyleSheet("padding: 6px;")
+        self.btn_save.clicked.connect(self.on_save_clicked)
+        self.btn_save.setEnabled(False) # 一開始沒有數據，先鎖住
+        
+        # 讀取按鈕
+        self.btn_load = QPushButton("Load Butterfly")
+        self.btn_load.setStyleSheet("padding: 6px;")
+        self.btn_load.clicked.connect(self.on_load_clicked)
+        
+        # 刷新按鈕
+        self.btn_refresh = QPushButton("⟲")
+        self.btn_refresh.setMaximumSize(30,30)
+        self.btn_refresh.clicked.connect(self.on_refresh_clicked)
+
+        data_layout.addWidget(self.btn_save)
+        data_layout.addWidget(self.btn_load)
+        data_layout.addWidget(self.btn_refresh)
+        data_group.setLayout(data_layout)
+        
+        self.controls_layout.addWidget(data_group)
     # =================================================
     #  Logic: Geometry Import (Fixed)
     # =================================================
@@ -261,7 +344,6 @@ class ButterflyTab(QWidget):
                 with open(fname, 'rb') as f: 
                     geo_data = pickle.load(f)
             elif fname.endswith('.npz'):
-                # 假設 SimplicialComplex 有 load 方法
                 geo_data = SimplicialComplex.load(fname)
             
             if geo_data:
@@ -345,7 +427,7 @@ class ButterflyTab(QWidget):
             self.progress_lbl.setStyleSheet("color: orange;")
             
             # 3. 啟動 Worker
-            # [修改] 傳入 self.hamiltonian_model 而非 geometry
+            # 傳入 self.hamiltonian_model
             self.worker = Entomologist(self.hamiltonian_model, control_vars, sweep_config)
             
             self.worker.progress_sig.connect(lambda v: self.progress_lbl.setText(f"Progress: {v}%"))
@@ -364,11 +446,24 @@ class ButterflyTab(QWidget):
             self.progress_lbl.setText("Aborting...")
 
     def _on_worker_finished(self, cage: ButterflyCage):
+
         self.last_cage = cage
         self._set_ui_locked(False)
-        self.progress_lbl.setText(f"Done. (Steps={len(cage.params)})")
+        steps = len(cage.params)
+        self.progress_lbl.setText(f"Done. (Steps={steps})")
         self.progress_lbl.setStyleSheet("color: green;")
-        QMessageBox.information(self, "Success", "Calculation Complete!")
+        
+        self.btn_save.setEnabled(True)
+        # [新增] 呼叫 Plotter 繪圖
+        print(f"[UI] Plotting {steps} steps...")
+        if self.combo_plot_modes.currentText() == 'Plot Lines':
+            mode = 'Plot Lines'
+            linewidth = self.spin_line_width.value()
+            self.plotter.update_plot(cage, plot_mode=mode, linewidth=linewidth)
+        else:
+            mode = 'Plot Density'
+            bins = (self.spin_bins_L.value(), self.spin_bins_R.value())
+            self.plotter.update_plot(cage, plot_mode=mode, bins=bins)
 
     def _on_worker_error(self, msg):
         self._set_ui_locked(False)
@@ -467,6 +562,182 @@ class ButterflyTab(QWidget):
         self.table_path.insertRow(r)
         self.table_path.setItem(r,0, QTableWidgetItem("0.0"))
         self.table_path.setItem(r,1, QTableWidgetItem("0.0"))
+
     def _rem_path_row(self):
         if self.table_path.rowCount() > 2:
             self.table_path.removeRow(self.table_path.rowCount()-1)
+
+        # ---------------------------------------------------------
+
+    def on_save_clicked(self):
+        if self.last_cage is None:
+            return
+
+        # 開啟檔案儲存對話框
+        file_path, filter_type = QFileDialog.getSaveFileName(
+            self,
+            "Save Butterfly Cage",
+            os.getcwd(),
+            "NumPy Zip (*.npz);;Pickle Object (*.pkl)"
+        )
+
+        if file_path:
+            # 根據使用者選的副檔名自動補齊 (如果沒打的話)
+            if filter_type.startswith("NumPy") and not file_path.endswith('.npz'):
+                file_path += '.npz'
+            elif filter_type.startswith("Pickle") and not file_path.endswith('.pkl'):
+                file_path += '.pkl'
+
+            success = self.last_cage.save(file_path)
+            
+            if success:
+                QMessageBox.information(self, "Success", f"Data saved to:\n{file_path}")
+            else:
+                QMessageBox.critical(self, "Error", "Failed to save data.")
+
+    def on_load_clicked(self):
+        # 開啟檔案讀取對話框
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Load Butterfly Cage",
+            os.getcwd(),
+            "Butterfly Files (*.npz *.pkl);;All Files (*)"
+        )
+
+        if file_path:
+            try:
+                # 調用靜態方法載入
+                cage = ButterflyCage.load(file_path)
+                
+                if isinstance(cage, ButterflyCage):
+                    self.last_cage = cage
+                    
+                    # 1. 更新繪圖 (這裡會自動讀取 cage.path_ticks 畫出漂亮的 2D 軸)
+                    if self.combo_plot_modes.currentText() == 'Plot Lines':
+                        mode = 'Plot Lines'
+                        linewidth = self.spin_line_width.value()
+                        self.plotter.update_plot(cage, plot_mode=mode, linewidth=linewidth)
+                    else:
+                        mode = 'Plot Density'
+                        bins = (self.spin_bins_L.value(), self.spin_bins_R.value())
+                        self.plotter.update_plot(cage, plot_mode=mode, bins=bins)
+                    
+                    # 2. 啟用儲存按鈕 (讀進來的檔案也可以另存)
+                    self.btn_save.setEnabled(True)
+                    
+                    # 3. (選用) 更新 UI 狀態以匹配檔案內容
+                    # 例如顯示載入的模式是 1D 還是 2D
+                    mode = cage.mode
+                    info_text = f"Loaded {mode} Cage.\nSteps: {len(cage.eigenvalues)}"
+                    QMessageBox.information(self, "Loaded", info_text)
+                else:
+                    QMessageBox.warning(self, "Error", "File loaded but It's not a butterfly.")
+                    
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to load file:\n{str(e)}")
+
+    def on_refresh_clicked(self):
+
+        if self.combo_plot_modes.currentText() == 'Plot Lines':
+            print(f"[UI] Plotting {len(self.last_cage.eigenvalues)} steps...")
+            mode = 'Plot Lines'
+            linewidth = self.spin_line_width.value()
+            self.plotter.update_plot(self.last_cage, plot_mode=mode, linewidth=linewidth)
+        else:
+            print(f"[UI] Plotting {len(self.last_cage.eigenvalues)} steps...")
+            mode = 'Plot Density'
+            bins = (self.spin_bins_L.value(), self.spin_bins_R.value())
+            self.plotter.update_plot(self.last_cage, plot_mode=mode, bins=bins)
+
+class ButterflyPlotter(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        
+        # 1. 建立 Layout
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        
+        # 2. 設定深色主題風格 (Dark Background Style)
+        # 使用 matplotlib 的 style 或 rcParams 來設定
+        self.figure = Figure(figsize=(5, 4), dpi=100)
+        self.figure.patch.set_facecolor('#1e1e1e') # 背景色
+
+        self.canvas = FigureCanvas(self.figure)
+        self.canvas.setStyleSheet("background-color: #1e1e1e;")
+        
+        self.toolbar = NavigationToolbar(self.canvas, self)
+        
+        layout.addWidget(self.toolbar)
+        layout.addWidget(self.canvas)
+        
+        # 3. 初始化 Axes
+        self.ax = self.figure.add_subplot(111)
+        self._init_axes_style()
+
+        # 特殊 cmap Blues帶透明度
+        self.cmap_neo = LinearSegmentedColormap.from_list(
+            'custom_cmap', [(0, "#00000000"), (0.35, "#3858C2AF") ,  (1, "#0000FF")], N=256
+        )
+        
+        
+
+    def _init_axes_style(self):
+        """設定座標軸樣式 (白色文字、深色背景)"""
+        self.ax.set_facecolor('#1e1e1e')
+        self.ax.tick_params(axis='x', colors='white')
+        self.ax.tick_params(axis='y', colors='white')
+        self.ax.xaxis.label.set_color('white')
+        self.ax.yaxis.label.set_color('white')
+        
+        # 邊框顏色
+        for spine in self.ax.spines.values():
+            spine.set_edgecolor('#555')
+
+        self.ax.grid(True, color='#333', linestyle='--', linewidth=0.5)
+        self.figure.subplots_adjust( top=0.949,bottom=0.074,left=0.075,right=0.972,hspace=0.2,wspace=0.2)
+
+    def update_plot(self, cage , plot_mode=None, linewidth=None, bins=None):
+        """
+        繪製蝴蝶圖
+        Args:
+            cage (ButterflyCage): 包含 params (flux) 和 eigenvalues
+        """
+        self.ax.clear()
+        self._init_axes_style()
+        
+        if cage is None or len(cage.params) == 0:
+            self.ax.text(0.5, 0.5, "No Data", color='#777', 
+                         ha='center', va='center', transform=self.ax.transAxes)
+            self.canvas.draw()
+            return
+
+        # 準備數據
+        if cage.mode == '1D':
+            x = cage.params  # (Steps,)
+        elif cage.mode == '2D':
+            x = np.array(range(len(cage.params)))  # (Steps,)
+        # eigenvalues 可能是 List of arrays，轉為 2D numpy array (Steps, N_modes)
+        y = np.array(cage.eigenvalues) 
+
+        # 繪製(根據 plot_mode)
+        if plot_mode == 'Plot Lines':
+            self.ax.plot(x, y, color='#00E5FF', alpha=0.8, linewidth=linewidth)
+        elif plot_mode == 'Plot Density':
+            x = np.kron(x, np.ones(y.shape[1])) 
+            y = y.flatten()
+            self.ax.hist2d(x, y, cmap=self.cmap_neo, bins=bins)
+
+        # 設定標籤
+        self.ax.set_ylabel('Energy ($E/t$)')
+        self.ax.set_title('Hofstadter Butterfly', color='white', pad=10)
+        if cage.mode == '1D':
+            self.ax.set_xlabel('Magnetic Flux ($\Phi/\Phi_0$)')
+        elif cage.mode == '2D':
+            self.ax.set_xticks(list(cage.path_ticks.keys()), list(cage.path_ticks.values()))
+            self.ax.set_xlabel('Flux Path (Φ1,Φ2)')
+        
+        # 自動調整範圍 (保留一點邊距)
+        self.ax.set_xlim(x.min(), x.max())
+        
+        self.canvas.draw()

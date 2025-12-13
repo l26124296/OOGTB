@@ -88,9 +88,18 @@ class LatticeGeneratorTab(QWidget):
         self.btn_generate.clicked.connect(self.run_generation)
         self.controls_layout.addWidget(self.btn_generate)
 
+        self.io_layout = QHBoxLayout()
         self.btn_save = QPushButton("Save to .npz")
+        self.btn_save.setStyleSheet("padding: 6px;")
         self.btn_save.clicked.connect(self.save_data)
-        self.controls_layout.addWidget(self.btn_save)
+
+        self.btn_load = QPushButton("Load from .npz")
+        self.btn_load.setStyleSheet("padding: 6px;")
+        self.btn_load.clicked.connect(self.load_data)
+
+        self.io_layout.addWidget(self.btn_save)
+        self.io_layout.addWidget(self.btn_load)
+        self.controls_layout.addLayout(self.io_layout)
 
         # 2. 右側繪圖區 (PyQtGraph)
         self.plot_widget = pg.PlotWidget()
@@ -546,3 +555,20 @@ class LatticeGeneratorTab(QWidget):
             except Exception as e:
                 traceback.print_exc()
                 QMessageBox.critical(self, "Save Error", f"Failed to save file:\n{str(e)}")
+
+    def load_data(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,                  
+            "Load Lattice Data",   # 視窗標題
+            "./tiles",                    # 預設路徑 (空字串代表當前目錄)
+            "NumPy Compressed (*.npz);;All Files (*)" # 檔案類型過濾器
+        )
+        if file_path:
+            try:
+                data =SimplicialComplex.load(file_path)
+                self.current_complex = data
+                self.update_plot()
+            except Exception as e:
+                traceback.print_exc()
+                QMessageBox.critical(self, "Load Error", f"Failed to load file:\n{str(e)}")
+

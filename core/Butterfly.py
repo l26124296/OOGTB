@@ -1,7 +1,6 @@
 import numpy as np
 import traceback
 import pickle
-import time
 from scipy import linalg as sla  # Dense solver for full spectrum
 from PyQt6.QtCore import QThread, pyqtSignal
 
@@ -19,17 +18,18 @@ except ImportError:
 # 1. ButterflyCage (Data Container)
 # ==============================================================================
 class ButterflyCage:
-    def __init__(self, eigenvalues=None, params=None, mode='1D', config=None):
+    def __init__(self, eigenvalues=None, params=None, mode='1D', config=None, path_ticks=None):
         self.eigenvalues = eigenvalues if eigenvalues is not None else np.array([])
         self.params = params if params is not None else np.array([])
         self.mode = mode
         self.config = config if config else {}
-
+        self.path_ticks = path_ticks if path_ticks else {}
     @classmethod
     def from_entomologist(cls, entomologist, results):
         return cls(
             eigenvalues=results['eigenvalues'],
             params=results['params'],
+            path_ticks=results['path_ticks'],
             mode=entomologist.mode,
             config={
                 'control_vars': entomologist.control_vars,
@@ -77,7 +77,7 @@ class Entomologist(QThread):
     finished_sig = pyqtSignal(object) 
     error_sig = pyqtSignal(str)
 
-    def __init__(self, geometry, control_vars, sweep_config):
+    def __init__(self, hamiltonian_model, control_vars, sweep_config):
         """
         :param geometry: SimplicialComplex
         :param control_vars: Dict {'onsite_val', 'hopping_map', ...}
@@ -88,7 +88,7 @@ class Entomologist(QThread):
         if HamiltonianModel is None:
             raise ImportError("HamiltonianModel class is missing.")
             
-        self.model = HamiltonianModel(geometry)
+        self.model = hamiltonian_model
         self.control_vars = control_vars
         self.sweep_config = sweep_config
         
@@ -97,47 +97,76 @@ class Entomologist(QThread):
         
         # 預先計算物理磁場序列 (Flux Steps)
         # 注意：計算這個可能需要一點時間 (特別是 2D Torch 搜索)，但只執行一次
-        self.path_matrix = self._calculate_path_matrix()
+        self.path_matrix , self.path_ticks = self._calculate_path_matrix()
         
         self._is_running = True
 
     def _calculate_path_matrix(self):
-        """產生磁場序列。如果是 2D，會執行 Diophantine Search 將 (xi, yi) 轉為 B"""
+        """
+        產生磁場序列與路徑標記。
+        Returns: 
+            (np.array, dict) -> (b_field_values, {index: "Label"})
+        """
         
         # --- CASE 1: 1D Sweep ---
         if self.mode == '1D':
             f_min = self.sweep_config.get('min', 0.0)
             f_max = self.sweep_config.get('max', 1.0)
-            return np.linspace(f_min, f_max, self.resolution)
+            
+            # 1D 簡單標記頭尾
+            vals = np.linspace(f_min, f_max, self.resolution)
+            ticks = {0: f"{f_min:.2f}", len(vals)-1: f"{f_max:.2f}"}
+            return vals, ticks
             
         # --- CASE 2: 2D Diophantine Path ---
         elif self.mode == '2D':
+            # 讀取 path_points (tuple list)
             path_points = self.sweep_config.get('path_points', [])
-            areas = self.sweep_config.get('areas', (1.0, 1.0)) # (A_thin, A_thick)
+            areas = self.sweep_config.get('areas', (1.0, 1.0)) 
             
             if len(path_points) < 2:
-                return np.array([])
+                return np.array([]), {}
             
-            # A. 產生路徑點 (xi, yi)
+            # A. 產生路徑點 (xi, yi) 與 Ticks
             raw_path = []
+            ticks = {} # 用來存 {index: "(x, y)"}
+            
             path_arr = np.array(path_points)
             n_segments = len(path_arr) - 1
-            cuts_per_seg = max(1, self.resolution // n_segments)
             
+            # 防止除以零或是過少點數
+            if n_segments < 1: n_segments = 1
+            cuts_per_seg = max(2, self.resolution // n_segments)
+            
+            current_idx = 0
+
             for i in range(n_segments):
                 p_start = path_arr[i]
                 p_end = path_arr[i+1]
-                is_last = (i == n_segments - 1)
-                ts = np.linspace(0, 1, cuts_per_seg, endpoint=is_last)
+                
+                # 1. 記錄這一段起點的 Tick
+                # 格式化 Label 為 "(0.12, 0.34)"
+                label_str = f"({p_start[0]:.2g}, {p_start[1]:.2g})"
+                ticks[current_idx] = label_str
+                
+                # 2. 插值生成路徑
+                # 如果不是最後一段，endpoint=False 以避免下一段起點重複
+                is_last_segment = (i == n_segments - 1)
+                ts = np.linspace(0, 1, cuts_per_seg, endpoint=is_last_segment)
+                
                 for t in ts:
                     pt = p_start + (p_end - p_start) * t
                     raw_path.append(pt)
-            
-            # B. 將 (xi, yi) 轉換為 B-field
-            #    公式: u = xi - r * yi
-            #    Diophantine: Find n, m s.t. r*n - m approx u
-            #    B = Average( B_thin, B_thick )
-            
+                
+                # 3. 更新 Index 計數
+                current_idx += len(ts)
+
+            # 4. 補上最後一個點的 Tick
+            p_last = path_arr[-1]
+            last_label = f"({p_last[0]:.2g}, {p_last[1]:.2g})"
+            ticks[len(raw_path) - 1] = last_label
+
+            # B. 將 (xi, yi) 轉換為 B-field (保留您的 Diophantine 邏輯)
             A_thin, A_thick = areas
             if A_thick == 0 or A_thin == 0:
                 raise ValueError("2D areas must be both non-zero.")
@@ -145,30 +174,28 @@ class Entomologist(QThread):
             
             b_field_sequence = []
             
-            # 使用 PyTorch 還是 NumPy?
             use_torch = HAS_TORCH and torch.cuda.is_available()
             search_func = self._diophantine_search_torch if use_torch else self._diophantine_search_numpy
             
             print(f"[Entomologist] Starting 2D Path Search using {'PyTorch GPU' if use_torch else 'NumPy CPU'}...")
             
-            for (xi, yi) in raw_path:
+            for pt in raw_path:
+                xi, yi = pt[0], pt[1] # raw_path 裡的元素是 numpy array
                 u = xi - r * yi
                 
                 # 執行搜索
                 n, m, error = search_func(r, u)
                 
                 # 反推磁場
-                # b1 = 2*pi*(m+xi)/area_thin
-                # b2 = 2*pi*(n+yi)/area_thick
                 b1 = 2 * np.pi * (m + xi) / A_thin
                 b2 = 2 * np.pi * (n + yi) / A_thick
                 
-                b_avg = (b1 + b2) / 2.0
+                b_avg = b1
                 b_field_sequence.append(b_avg)
                 
-            return np.array(b_field_sequence)
+            return np.array(b_field_sequence), ticks
         
-        return np.array([])
+        return np.array([]), {}
 
     # --------------------------------------------------------------------------
     # Diophantine Search Implementations
@@ -258,7 +285,7 @@ class Entomologist(QThread):
         將控制變數注入 Model 並建構。
         flux_param 在此處已經是物理磁場 (Scalar B-field)。
         """
-        self.model.construct(flux_param, **self.control_vars)
+        self.model.construct(b_field=flux_param, **self.control_vars)
 
     def run(self):
         try:
@@ -279,7 +306,7 @@ class Entomologist(QThread):
                 self.construct(b_field)
 
                 # 2. 求解特徵值 (Dense Solver for Full Spectrum)
-                H = self.model.H
+                H = self.model.H_sparse
                 if hasattr(H, 'toarray'):
                     H_dense = H.toarray()
                 else:
@@ -297,7 +324,8 @@ class Entomologist(QThread):
             if self._is_running:
                 results = {
                     'eigenvalues': np.array(all_eigenvalues),
-                    'params': np.array(valid_params)
+                    'params': np.array(valid_params),
+                    'path_ticks': self.path_ticks
                 }
                 cage = ButterflyCage.from_entomologist(self, results)
                 self.finished_sig.emit(cage)
