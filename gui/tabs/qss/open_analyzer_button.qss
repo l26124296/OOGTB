@@ -1,0 +1,18 @@
+QPushButton#cal_TE {
+    background-color: #2fbd1c; 
+    color: black; 
+    font-weight: bold;
+}
+QPushButton#cal_TE:hover {
+    background-color: #5beca8; 
+}
+QPushButton#cal_TE:pressed {
+    background-color: #076d26; 
+    padding-top: 5px;          
+    padding-left: 5px;
+}
+QPushButton#cal_TE:disabled {
+    background-color: #525252; 
+    padding-top: 5px;          
+    padding-left: 5px;
+}

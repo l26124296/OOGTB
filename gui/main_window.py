@@ -10,7 +10,7 @@ from gui.tabs.generator_tabs import LatticeGeneratorTab
 from gui.tabs.hmodel_tabs import PhysicsCalculationTab
 from gui.tabs.butterfly_tabs import ButterflyTab
 from gui.tabs.ising_tabs import IsingTab
-from gui.tabs.transmission_tabs import TaransmissionTab
+from gui.tabs.transmission_tabs import TransmissionTab
 class LatticeStudio(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -31,7 +31,7 @@ class LatticeStudio(QMainWindow):
         self.tab_physics = PhysicsCalculationTab(generator_tab=self.tab_generator)
         self.tab_butterfly = ButterflyTab(generator_tab=self.tab_generator)
         self.tab_ising = IsingTab()
-        self.tab_tansmission = TaransmissionTab()
+        self.tab_tansmission = TransmissionTab(physics_tab=self.tab_physics)
 
         icon_geo = QIcon('icon/geometry.png')
         icon_phy = QIcon('icon/phys.png')

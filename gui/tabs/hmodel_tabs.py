@@ -55,6 +55,7 @@ class PhysicsCalculationTab(QWidget):
         title = QLabel("<h2>Hamiltonian Model</h2>")
         title.setFont(QFont("Arial", 12, QFont.Weight.Bold))
         self.controls_layout.addWidget(title)
+        self.controls_layout.addWidget(HOLine())
         # -------------------------------------------------
         # 1.1 資料來源區塊 (Geometry Source)
         # -------------------------------------------------

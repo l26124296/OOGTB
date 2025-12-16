@@ -22,7 +22,7 @@ from core.GeometryData import SimplicialComplex
 from core.Butterfly import Entomologist, ButterflyCage
 
 # 輔助工具
-
+from gui.utils import HOLine
 from asteval import Interpreter
 aeval = Interpreter()
 
@@ -52,18 +52,19 @@ class ButterflyTab(QWidget):
         main_layout = QHBoxLayout(self)
 
         # Left Panel (Controls)
-        self.scroll = QScrollArea()
-        self.scroll.setWidgetResizable(True)
-        self.scroll.setFixedWidth(400)
+        self.scrollarea = QScrollArea()
+        self.scrollarea.setWidgetResizable(True)
+        self.scrollarea.setFixedWidth(320)
         
         self.controls_container = QWidget()
         self.controls_layout = QVBoxLayout(self.controls_container)
         self.controls_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.scroll.setWidget(self.controls_container)
+        self.scrollarea.setWidget(self.controls_container)
 
         title = QLabel("<h2>Butterfly Simulation</h2>")
         title.setFont(QFont("Arial", 12, QFont.Weight.Bold))
         self.controls_layout.addWidget(title)
+        self.controls_layout.addWidget(HOLine())
         # Groups
         self._init_group_geometry()
         self._init_group_model()
@@ -78,9 +79,8 @@ class ButterflyTab(QWidget):
 
         # Splitter
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
-        self.splitter.addWidget(self.scroll)
+        self.splitter.addWidget(self.scrollarea)
         self.splitter.addWidget(self.plotter)
-        self.splitter.setStretchFactor(1, 1)
         
         main_layout.addWidget(self.splitter)
 
@@ -660,7 +660,7 @@ class ButterflyPlotter(QWidget):
         
         # 2. 設定深色主題風格 (Dark Background Style)
         # 使用 matplotlib 的 style 或 rcParams 來設定
-        self.figure = Figure(figsize=(5, 4), dpi=100)
+        self.figure = Figure(figsize=(10, 4), dpi=100)
         self.figure.patch.set_facecolor('#1e1e1e') # 背景色
 
         self.canvas = FigureCanvas(self.figure)
@@ -680,8 +680,6 @@ class ButterflyPlotter(QWidget):
             'custom_cmap', [(0, "#00000000"), (0.35, "#3858C2AF") ,  (1, "#0000FF")], N=256
         )
         
-        
-
     def _init_axes_style(self):
         """設定座標軸樣式 (白色文字、深色背景)"""
         self.ax.set_facecolor('#1e1e1e')
