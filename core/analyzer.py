@@ -1,7 +1,7 @@
 import numpy as np
 import time
 from typing import Optional, Tuple, Union, List
-
+from scipy.spatial import ConvexHull
 # 引入 Model
 from core.PhysicsModel import HamiltonianModel
 
@@ -154,12 +154,19 @@ class ElectronicState:
         """局域陳數 C(r)"""
         if self.Projector is None: raise RuntimeError("Set filled states first.")
         
-        # ... (這裡沿用之前的 Chern Marker 邏輯，需要 Model 提供 X, Y) ...
+        # Chern Marker = 4 pi Im Tr ([PXP , PYP])
         X_sp, Y_sp = self.model.get_position_operators()
         X = X_sp.todense() # 或使用 sparse 乘法優化
         Y = Y_sp.todense()
         P = self.Projector
-        Operator = P @ (X @ P @ Y - Y @ P @ X) @ P
+
+        # Estimate unit cell size
+        XY = np.array([np.diag(X), np.diag(Y)]).T
+        N = XY.shape[0]
+        A = ConvexHull(XY).volume / N
+        print("[Analyzer] estimated Unit cell size:", A)
+
+        Operator = P @ (X @ P @ Y - Y @ P @ X) @ P / A
         return 4 * np.pi * np.imag(np.diag(Operator))
     
     def calculate_structure_factor(self, q_range: float = 20.0, resolution: int = 400, use_gpu: bool = True) -> Tuple[np.ndarray, list]:

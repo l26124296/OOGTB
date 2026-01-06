@@ -730,7 +730,7 @@ class ButterflyPlotter(QWidget):
         self.ax.set_ylabel('Energy ($E/t$)')
         self.ax.set_title('Hofstadter Butterfly', color='white', pad=10)
         if cage.mode == '1D':
-            self.ax.set_xlabel('Magnetic Flux ($\Phi/\Phi_0$)')
+            self.ax.set_xlabel('Magnetic Flux Density ($\Phi/\Phi_0$ per area)')
         elif cage.mode == '2D':
             self.ax.set_xticks(list(cage.path_ticks.keys()), list(cage.path_ticks.values()))
             self.ax.set_xlabel('Flux Path (Φ1,Φ2)')

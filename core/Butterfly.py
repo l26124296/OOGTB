@@ -173,16 +173,13 @@ class Entomologist(QThread):
             r = A_thin / A_thick 
             
             b_field_sequence = []
+
+            search_func = self._diophantine_search_torch if HAS_TORCH else self._diophantine_search_numpy
             
-            use_torch = HAS_TORCH and torch.cuda.is_available()
-            search_func = self._diophantine_search_torch if use_torch else self._diophantine_search_numpy
-            
-            print(f"[Entomologist] Starting 2D Path Search using {'PyTorch GPU' if use_torch else 'NumPy CPU'}...")
-            
+            print(f"[Entomologist] Starting 2D Path Search using {'PyTorch GPU' if HAS_TORCH else 'NumPy CPU'}...")
             for pt in raw_path:
                 xi, yi = pt[0], pt[1] # raw_path 裡的元素是 numpy array
                 u = xi - r * yi
-                
                 # 執行搜索
                 n, m, error = search_func(r, u)
                 
@@ -190,9 +187,8 @@ class Entomologist(QThread):
                 b1 = 2 * np.pi * (m + xi) / A_thin
                 b2 = 2 * np.pi * (n + yi) / A_thick
                 
-                b_avg = b1
+                b_avg = ( b1 + b2 ) / 2
                 b_field_sequence.append(b_avg)
-                
             return np.array(b_field_sequence), ticks
         
         return np.array([]), {}
@@ -209,7 +205,7 @@ class Entomologist(QThread):
         求解: min |r*n - m - u|
         """
         # 1. 建立 n 的範圍陣列
-        n_vals = np.arange(-n_search_range, n_search_range + 1, dtype=np.int64)
+        n_vals = np.arange(0, n_search_range + 1, dtype=np.int64)
         
         # 2. 計算理想的 m (浮點數)
         #    由 r*n - m = u => m = r*n - u
@@ -252,7 +248,7 @@ class Entomologist(QThread):
         num_batches = (total_n_count + batch_size - 1) // batch_size
         
         for i in range(num_batches):
-            n_start = -n_search_range + i * batch_size
+            n_start =  i * batch_size
             n_end = min([-n_search_range + (i + 1) * batch_size, n_search_range + 1])
             
             if n_start >= n_end: continue
@@ -285,7 +281,7 @@ class Entomologist(QThread):
         將控制變數注入 Model 並建構。
         flux_param 在此處已經是物理磁場 (Scalar B-field)。
         """
-        self.model.construct(b_field=flux_param, **self.control_vars)
+        self.model.construct(b_field=flux_param,silent=True, **self.control_vars)
 
     def run(self):
         try:

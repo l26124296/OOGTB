@@ -26,7 +26,8 @@ class HamiltonianModel:
                   ttdict: Dict[str, complex], 
                   b_field: float = 0.0, 
                   vec_pot_mode: str = 'Landau',
-                  onsite_config: Dict = None) -> sp.csc_matrix:
+                  onsite_config: Dict = None
+                  , silent: bool = False) -> sp.csc_matrix:
         """
         構建哈密頓量 (向量化實作)
         
@@ -36,7 +37,8 @@ class HamiltonianModel:
             vec_pot_mode: 'Landau' or 'Circular'
             onsite_config: 額外位能設定{'type':('bipartite, 'laplace, 'random'), 'scale': float}
         """
-        print(f"[Physics] Constructing Hamiltonian (B={b_field}, Gauge={vec_pot_mode})...")
+        if not silent:
+            print(f"[Physics] Constructing Hamiltonian (B={b_field}, Gauge={vec_pot_mode})...")
         
         N = self.geo.positions.shape[0]
         edges = self.geo.edges
@@ -153,12 +155,12 @@ class HamiltonianModel:
                 # 注意：這會受到相位影響變成複數，物理上 phonon matrix 應該用 abs(t)
                 
                 # 簡單做法：直接對目前的 H 取 row sum
-                row_sums = np.array(self.H_sparse.sum(axis=1)).flatten()
-                col_sums = np.array(self.H_sparse.sum(axis=0)).flatten()
+                row_sums = np.array(np.sum(self.H_sparse.astype(bool), axis=1)).flatten()
+                col_sums = np.array(np.sum(self.H_sparse.astype(bool), axis=0)).flatten()
 
                 D = sp.diags((row_sums+col_sums)/2)
                 
-                self.H_sparse = scale * D - self.H_sparse
+                self.H_sparse = scale * D + self.H_sparse
 
         return self.H_sparse
 

@@ -401,5 +401,5 @@ class Analyzer:
         M = H * Rho
         J_matrix = 2 * M.imag
         
-        print(f'[Debug] J-matrix Hermitian check: {np.allclose(J_matrix, -J_matrix.T)}')
+        print(f'[Debug] J-matrix anti-Hermitian check: {np.allclose(J_matrix, -J_matrix.T)}')
         return J_matrix

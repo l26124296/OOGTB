@@ -388,6 +388,7 @@ class TransmissionTab(QWidget):
         self.lbl_status_msg.setStyleSheet("color: green;")
 
         # 6. 繪製 Sites (視覺刷新)
+        self.kill_ants()
         self._refresh_site_visuals()
         
         # 7. 更新列表 (保留之前的選擇，但重新驗證索引有效性)
