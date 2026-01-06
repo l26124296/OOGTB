@@ -147,6 +147,10 @@ class TransmissionTab(QWidget):
         self.btn_run_gf.clicked.connect(self._on_run_gf)
         left_layout.addWidget(self.btn_run_gf, alignment=Qt.AlignmentFlag.AlignCenter)
 
+        left_layout.addWidget(HOLine())
+        subtitle = QLabel("<h3>Source Settings</h3>")
+        subtitle.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        left_layout.addWidget(subtitle)
         self.btn_open_analyzer = QPushButton("Open Transmission Analyzer")
         self.btn_open_analyzer.setEnabled(False) # 預設停用，直到算出 GF 為止
         self.btn_open_analyzer.setObjectName("cal_TE")
@@ -236,7 +240,7 @@ class TransmissionTab(QWidget):
         layout = self.lead_layout
         
         # 1. 模式選擇
-        layout.addWidget(QLabel("<b>Model Type</b>"))
+        layout.addWidget(QLabel("<b>Lead Model Type</b>"))
         self.combo_lead_mode = QComboBox()
         self.combo_lead_mode.addItems(["Wide-Band Limit (WBL)", "1D Semi-Infinite Chain"])
         self.combo_lead_mode.currentIndexChanged.connect(self._on_lead_mode_changed)
@@ -338,6 +342,10 @@ class TransmissionTab(QWidget):
         geo = getattr(model, 'geo', None)
         if not geo:
             self.lbl_status_msg.setText("No Geometry (geo) found in model.")
+            return
+        # 3. 檢查Hamiltonian矩陣是否已經建立
+        if model.H_sparse is None:
+            self.lbl_status_msg.setText("Hamiltonian matrix not constructed.")
             return
 
         # 3. 處理 Sites (座標)
